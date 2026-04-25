@@ -1,56 +1,38 @@
+#include "city_manager.h"
+#include "filter.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <time.h>
 
-#define REPORT_SIZE 208
-#define MAX_DESCRIPTION 100
-#define MAX_STR 50
-#define FILE_PATH_SIZE 256
 
-typedef struct {
-    int id;
-    char inspector[MAX_STR];
-    float latitude;
-    float longitude;
-    char category[MAX_STR];
-    int severity;
-    time_t timestamp;
-    char description[MAX_DESCRIPTION]; 
-} Report;
-
-
+void setup_district(char* district) ;
 int check_permission(const char *filepath, const char *role, int require_write);
 void mode_to_string(mode_t mode, char *str);
-void setup_district(char* district);
 
-//AI generated 
-int parse_condition(const char *input, char *field, char *op, char *value);
-int match_condition(Report *r, const char *field, const char *op, const char *value);
-
-int  filter(char* district, char* condition);
-
-
-int main(int argc, char* argv[]){
+int main(int argc, char* argv[]) {
     if (argc < 6) {
         fprintf(stderr, "Usage: %s --role <role> --user <user> --<command> <district_id> [args...]\n", argv[0]);
         return 1;
     }
+    
     char* role = NULL;
-    char* user  = NULL;
+    char* user = NULL;
     char* command = NULL;
     char* district = NULL;
+    char* extra_arg = NULL; 
 
-     for (int i = 1; i < argc; i++) {
+    for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--role") == 0 && i + 1 < argc) role = argv[++i];
         else if (strcmp(argv[i], "--user") == 0 && i + 1 < argc) user = argv[++i];
         else if (strncmp(argv[i], "--", 2) == 0) {
-            command = argv[i] + 2; // Skip the '--'
+            command = argv[i] + 2; 
             if (i + 1 < argc) district = argv[++i];
+            if (i + 1 < argc && strncmp(argv[i+1], "--", 2) != 0) extra_arg = argv[++i]; 
         }
     }
 
@@ -61,32 +43,25 @@ int main(int argc, char* argv[]){
 
     setup_district(district);
 
-
-    if(strcmp(command, "add") == 0){
+    if (strcmp(command, "add") == 0) {
         char filepath[FILE_PATH_SIZE];
-     snprintf(filepath, sizeof(filepath), "%s/reports.dat", district);
+        snprintf(filepath, sizeof(filepath), "%s/reports.dat", district);
             
         if (!check_permission(filepath, role, 1)) {
             fprintf(stderr, "Error: User %s with role %s does not have write access to %s\n", user, role, filepath);
             return 1;
         }
-
         printf("Adding report to %s...\n", district);
         
     } else if (strcmp(command, "remove_report") == 0) {
-        if (strcmp(role, "manager") != 0) {
-            fprintf(stderr, "Error: Only managers can remove reports.\n");
-            return 1;
-        }
-        
-        printf("Removing report from %s...\n", district);
-    } 
+        // Remove logic
+    } else if (strcmp(command, "filter") == 0) {
+        // Filter logic
+    }
 
     return 0;
 }
 
-
-//Implementation
 
 void setup_district(char* district) {
     struct stat st = {0};
