@@ -18,8 +18,8 @@ void log_operation(const char* district, const char* role, const char* user, con
 void handle_add(const char* district, const char* role, const char* user);
 void handle_list(const char* district, const char* role, const char* user);
 void handle_remove_report(const char* district, const char* role, const char* user, const char* report_id_str);
-void handle_view(const char* district, const char* role, const char* user, const char* report_id_str) ;
-
+void handle_view(const char* district, const char* role, const char* user, const char* report_id_str);
+void handle_update_threshold(const char* district, const char* role, const char* user, const char* value_str);
 
 int main(int argc, char* argv[]) {
     if (argc < 6) {
@@ -58,16 +58,10 @@ int main(int argc, char* argv[]) {
         handle_view(district, role, user, extra_arg);
     } else if (strcmp(command, "remove_report") == 0) {
         handle_remove_report(district, role, user, extra_arg);
+    } else if (strcmp(command, "update_threshold") == 0) {
+        handle_update_threshold(district, role, user, extra_arg);
     } else if (strcmp(command, "filter") == 0) {
-        // Find the index of the first condition argument
-        int filter_start_idx = 0;
-        for (int i = 1; i < argc; i++) {
-            if (strcmp(argv[i], district) == 0) {
-                filter_start_idx = i + 1;
-                break;
-            }
-        }
-        if (filter_start_idx == 0 || filter_start_idx >= argc) {
+        if (!extra_arg) {
             fprintf(stderr, "Error: Missing condition for filter command.\n");
             return 1;
         }
@@ -76,6 +70,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Error: Unknown command '--%s'\n", command);
         return 1;
     }
+
     return 0;
 }
 
@@ -487,5 +482,58 @@ void handle_view(const char* district, const char* role, const char* user, const
 
     if (close(fd) == -1) {
         perror("System Error: close() failed on reports.dat");
+    }
+}
+
+void handle_update_threshold(const char* district, const char* role, const char* user, const char* value_str) {
+
+    if (strcmp(role, "manager") != 0) {
+        fprintf(stderr, "Access Denied: Only managers can update the threshold.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (!value_str) {
+        fprintf(stderr, "Error: Missing threshold value argument for update_threshold.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    char filepath[FILE_PATH_SIZE];
+    snprintf(filepath, sizeof(filepath), "%s/district.cfg", district);
+
+
+    struct stat st;
+    if (stat(filepath, &st) == -1) {
+        perror("System Error: stat() failed on district.cfg");
+        exit(EXIT_FAILURE);
+    }
+
+    if ((st.st_mode & 0777) != 0640) {
+        fprintf(stderr, "Diagnostic Error: Security breach or misconfiguration detected!\n");
+        fprintf(stderr, "Permissions for %s have been altered. Expected 0640, found %04o.\n", filepath, (st.st_mode & 0777));
+        fprintf(stderr, "Refusing operation.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    log_operation(district, role, user, "update_threshold");
+
+    int fd = open(filepath, O_WRONLY | O_TRUNC);
+    if (fd == -1) {
+        perror("System Error: open() failed on district.cfg");
+        exit(EXIT_FAILURE);
+    }
+
+    char buffer[32];
+    int len = snprintf(buffer, sizeof(buffer), "%s\n", value_str);
+    
+    if (write(fd, buffer, len) != len) {
+        perror("System Error: write() failed to update district.cfg");
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Successfully updated severity threshold to %s for district '%s'.\n", value_str, district);
+
+    if (close(fd) == -1) {
+        perror("System Error: close() failed on district.cfg");
     }
 }
