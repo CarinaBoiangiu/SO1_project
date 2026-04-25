@@ -18,7 +18,9 @@ void log_operation(const char* district, const char* role, const char* user, con
 void handle_add(const char* district, const char* role, const char* user);
 void handle_list(const char* district, const char* role, const char* user);
 void handle_remove_report(const char* district, const char* role, const char* user, const char* report_id_str);
-    
+void handle_view(const char* district, const char* role, const char* user, const char* report_id_str) ;
+
+
 int main(int argc, char* argv[]) {
     if (argc < 6) {
         fprintf(stderr, "Usage: %s --role <role> --user <user> --<command> <district_id> [args...]\n", argv[0]);
@@ -52,10 +54,20 @@ int main(int argc, char* argv[]) {
         handle_add(district, role, user);
     } else if (strcmp(command, "list") == 0) {
         handle_list(district, role, user);
+    } else if (strcmp(command, "view") == 0) {
+        handle_view(district, role, user, extra_arg);
     } else if (strcmp(command, "remove_report") == 0) {
         handle_remove_report(district, role, user, extra_arg);
     } else if (strcmp(command, "filter") == 0) {
-        if (!extra_arg) {
+        // Find the index of the first condition argument
+        int filter_start_idx = 0;
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], district) == 0) {
+                filter_start_idx = i + 1;
+                break;
+            }
+        }
+        if (filter_start_idx == 0 || filter_start_idx >= argc) {
             fprintf(stderr, "Error: Missing condition for filter command.\n");
             return 1;
         }
@@ -416,4 +428,64 @@ void handle_remove_report(const char* district, const char* role, const char* us
     }
     printf("File size AFTER removal: %ld bytes\n", (long)st_after.st_size);
     printf("Successfully removed report ID %d.\n", target_id);
+}
+
+void handle_view(const char* district, const char* role, const char* user, const char* report_id_str) {
+    if (!report_id_str) {
+        fprintf(stderr, "Error: Missing report_id argument for view command.\n");
+        exit(EXIT_FAILURE);
+    }
+    int target_id = atoi(report_id_str);
+
+    char filepath[FILE_PATH_SIZE];
+    snprintf(filepath, sizeof(filepath), "%s/reports.dat", district);
+
+    
+    if (!check_permission(filepath, role, 0)) {
+        fprintf(stderr, "Access Denied: User %s (Role: %s) cannot read %s\n", user, role, filepath);
+        exit(EXIT_FAILURE);
+    }
+
+    
+    log_operation(district, role, user, "view");
+
+    
+    int fd = open(filepath, O_RDONLY);
+    if (fd == -1) {
+        perror("System Error: open() failed on reports.dat for viewing");
+        exit(EXIT_FAILURE);
+    }
+
+    
+    Report r;
+    int found = 0;
+    
+    while (read(fd, &r, sizeof(Report)) == sizeof(Report)) {
+        if (r.id == target_id) {
+            char rec_time[64];
+            struct tm *rtm = localtime(&r.timestamp);
+            strftime(rec_time, sizeof(rec_time), "%Y-%m-%d %H:%M:%S", rtm);
+
+            printf("=== Report Details ===\n");
+            printf("Report ID: %d\n", r.id);
+            printf("Inspector: %s\n", r.inspector);
+            printf("Category : %s\n", r.category);
+            printf("Severity : %d\n", r.severity);
+            printf("Location : (%.4f, %.4f)\n", r.latitude, r.longitude);
+            printf("Reported : %s\n", rec_time);
+            printf("Details  : %s\n", r.description);
+            printf("======================\n");
+            
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found) {
+        printf("Report ID %d not found in district '%s'.\n", target_id, district);
+    }
+
+    if (close(fd) == -1) {
+        perror("System Error: close() failed on reports.dat");
+    }
 }
