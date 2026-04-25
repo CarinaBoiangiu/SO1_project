@@ -25,5 +25,6 @@ typedef struct {
 void setup_district(char* district);
 int check_permission(const char *filepath, const char *role, int require_write);
 void mode_to_string(mode_t mode, char *str);
+void log_operation(const char* district, const char* role, const char* user, const char* command);
 
 #endif
