@@ -1,22 +1,29 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g
 
-SRCS = $(wildcard *.c)
+TARGET1 = city_manager
+TARGET2 = monitor_reports
 
-OBJS = $(SRCS:.c=.o)
+SRCS1 = city_manager.c filter.c
+SRCS2 = monitor_reports.c
 
-TARGET = city_manager
+OBJS1 = $(SRCS1:.c=.o)
+OBJS2 = $(SRCS2:.c=.o)
 
-all: $(TARGET)
+all: $(TARGET1) $(TARGET2)
 
-$(TARGET): $(OBJS)
+$(TARGET1): $(OBJS1)
+	$(CC) $(CFLAGS) -o $@ $^
+
+$(TARGET2): $(OBJS2)
 	$(CC) $(CFLAGS) -o $@ $^
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -f $(TARGET1) $(TARGET2) $(OBJS1) $(OBJS2)
 	rm -f active_reports-*
+	rm -f .monitor_pid
 
 .PHONY: all clean

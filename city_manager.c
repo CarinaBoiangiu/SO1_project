@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -23,6 +24,7 @@ void handle_view(const char *district, const char *role, const char *user,
                  const char *report_id_str);
 void handle_update_threshold(const char *district, const char *role,
                              const char *user, const char *value_str);
+void handle_remove_district(const char *district, const char *role);
 
 int main(int argc, char *argv[]) {
     if (argc < 6) {
@@ -71,6 +73,8 @@ int main(int argc, char *argv[]) {
         handle_remove_report(district, role, user, extra_arg);
     } else if (strcmp(command, "update_threshold") == 0) {
         handle_update_threshold(district, role, user, extra_arg);
+    } else if (strcmp(command, "remove_district") == 0) {
+        handle_remove_district(district, role);
     } else if (strcmp(command, "filter") == 0) {
         if (!extra_arg) {
             fprintf(stderr, "Error: Missing condition for filter command.\n");
@@ -575,5 +579,57 @@ void handle_update_threshold(const char *district, const char *role,
 
     if (close(fd) == -1) {
         perror("System Error: close() failed on district.cfg");
+    }
+}
+void handle_remove_district(const char *district, const char *role) {
+
+    if (strcmp(role, "manager") != 0) {
+        fprintf(
+            stderr,
+            "Access Denied: Only managers can remove an entire district.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (strchr(district, '/') != NULL || strcmp(district, ".") == 0 ||
+        strcmp(district, "..") == 0 || strlen(district) == 0) {
+        fprintf(stderr, "Critical Error: Invalid district name. Path traversal "
+                        "or empty string detected.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    char symlink_name[FILE_PATH_SIZE];
+    snprintf(symlink_name, sizeof(symlink_name), "active_reports-%s", district);
+
+    if (unlink(symlink_name) == -1) {
+        perror("System Warning: Could not remove symlink (may already  be "
+               "deleted)");
+    } else {
+        printf("Symlink '%s' succesfully removed.\n", symlink_name);
+    }
+
+    printf("Initiating recursive deletion of ditrict: %s... \n", district);
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        perror("System Error:  fork() failed");
+        exit(EXIT_FAILURE);
+    } else if (pid == 0) {
+        execlp("rm", "rm", "-rf", district, NULL);
+        perror("System Error:  execlp() faield to execute rm");
+        exit(EXIT_FAILURE);
+    } else {
+        int status;
+        if (waitpid(pid, &status, 0) == -1) {
+            perror("System Error :  waitpid() failed");
+        } else {
+            if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+                printf("District '%s' and all its contents were succesfully "
+                       "removed.\n",
+                       district);
+            } else {
+                fprintf(stderr, "Error:  the 'rm -rf' command did not execute "
+                                "succesfully.\n");
+            }
+        }
     }
 }
