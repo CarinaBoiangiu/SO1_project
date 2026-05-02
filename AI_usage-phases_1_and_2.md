@@ -112,6 +112,75 @@
     }
 
     ```
+4. Using AI to modify the makefile to compile both city_manager.c and monitor_reports.c for the project:
+   - Promt used : 
+    ```makefile
+        How can i  modiffy  this  makefile  so i could compile all files including city_manager and monitor_report, which  both  have int main() : 
+        CC = gcc
+        CFLAGS = -Wall -Wextra -g
+
+        SRCS = $(wildcard *.c)
+
+        OBJS = $(SRCS:.c=.o)
+
+        TARGET = city_manager
+
+        all: $(TARGET)
+
+        $(TARGET): $(OBJS)
+            $(CC) $(CFLAGS) -o $@ $^
+
+        %.o: %.c
+            $(CC) $(CFLAGS) -c $< -o $@
+
+        clean:
+            rm -f $(TARGET) $(OBJS)
+            rm -f active_reports-*
+
+        .PHONY: all clean
+    ```
+   - Answer generated:
+    ```makefile
+    Important note: Makefiles strictly require Tabs for indentation, not spaces. When you paste this, make sure the indents under the rules are actual Tab characters.
+    CC = gcc
+    CFLAGS = -Wall -Wextra -g
+
+    # Define your two target executables
+    TARGET1 = city_manager
+    TARGET2 = monitor_reports
+
+    # Explicitly list the source files for each program
+    # (Don't forget filter.c belongs to city_manager!)
+    SRCS1 = city_manager.c filter.c
+    SRCS2 = monitor_reports.c
+
+    # Create object file variables for each
+    OBJS1 = $(SRCS1:.c=.o)
+    OBJS2 = $(SRCS2:.c=.o)
+
+    # The default rule now builds BOTH programs
+    all: $(TARGET1) $(TARGET2)
+
+    # Rule to build city_manager
+    $(TARGET1): $(OBJS1)
+        $(CC) $(CFLAGS) -o $@ $^
+
+    # Rule to build monitor_reports
+    $(TARGET2): $(OBJS2)
+        $(CC) $(CFLAGS) -o $@ $^
+
+    # Universal rule to compile .c files into .o files
+    %.o: %.c
+        $(CC) $(CFLAGS) -c $< -o $@
+
+    # Cleanup rule
+    clean:
+        rm -f $(TARGET1) $(TARGET2) $(OBJS1) $(OBJS2)
+        rm -f active_reports-*
+        rm -f .monitor_pid
+
+    .PHONY: all clean
+    ```
 
 ## What I changed
 
@@ -128,5 +197,6 @@
 2. I learned that the Unix shell interprets `<` and `>` as I/O redirection operators before the C program ever sees them. To pass these characters into `argv`, I learned they must be escaped with a backslash (`severity:\<:3`) or enclosed in quotes.
 3. I learned that I have to specify all the details for a prompt in order for AI to give a proper answer.
 4. I learned how to properly write a makefile. 
-
+5. I learned that we can't use wildcards in makefile to generate 2 executables.
+6. I learned in a shorter way how pid and pid_t works.
 

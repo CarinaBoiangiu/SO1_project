@@ -15,7 +15,7 @@ void cleanup_and_exit() {
     exit(EXIT_SUCCESS);
 }
 
-int main(){
+int main() {
     pid_t my_pid = getpid();
     printf("Starting monitor_reports...\n");
     printf("Monitor PID: %d\n", my_pid);
@@ -28,13 +28,13 @@ int main(){
 
     char pid_str[32];
     int len = snprintf(pid_str, sizeof(pid_str), "%d\n", my_pid);
-    
+
     if (write(fd, pid_str, len) != len) {
         perror("System Error: Failed to write complete PID to file");
         close(fd);
         exit(EXIT_FAILURE);
     }
-    
+
     if (close(fd) == -1) {
         perror("System Error: Failed to close .monitor_pid");
     }
@@ -43,7 +43,7 @@ int main(){
     printf("Monitor is now running in the background. Waiting for events...\n");
 
     while (1) {
-        sleep(1); 
+        sleep(1);
     }
 
     cleanup_and_exit();

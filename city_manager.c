@@ -615,20 +615,21 @@ void handle_remove_district(const char *district, const char *role) {
         exit(EXIT_FAILURE);
     } else if (pid == 0) {
         execlp("rm", "rm", "-rf", district, NULL);
-        perror("System Error:  execlp() faield to execute rm");
+        perror("System Error: execlp() failed to execute rm");
         exit(EXIT_FAILURE);
     } else {
         int status;
-        if (waitpid(pid, &status, 0) == -1) {
-            perror("System Error :  waitpid() failed");
+
+        if (wait(&status) == -1) {
+            perror("System Error: wait() failed");
         } else {
-            if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-                printf("District '%s' and all its contents were succesfully "
+            if (status == 0) {
+                printf("District '%s' and all its contents were successfully "
                        "removed.\n",
                        district);
             } else {
-                fprintf(stderr, "Error:  the 'rm -rf' command did not execute "
-                                "succesfully.\n");
+                fprintf(stderr, "Error: the 'rm -rf' command did not execute "
+                                "successfully.\n");
             }
         }
     }
