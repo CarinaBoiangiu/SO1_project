@@ -2,6 +2,7 @@
 #include "filter.h"
 
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,7 @@ void handle_view(const char *district, const char *role, const char *user,
 void handle_update_threshold(const char *district, const char *role,
                              const char *user, const char *value_str);
 void handle_remove_district(const char *district, const char *role);
+void notify_monitor(const char *district);
 
 int main(int argc, char *argv[]) {
     if (argc < 6) {
@@ -61,7 +63,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    setup_district(district);
+    if (strcmp(command, "remove_district") != 0) {
+        setup_district(district);
+    }
 
     if (strcmp(command, "add") == 0) {
         handle_add(district, role, user);
@@ -295,6 +299,9 @@ void handle_add(const char *district, const char *role, const char *user) {
     if (close(fd) == -1) {
         perror("System Error: close() failed on reports.dat");
     }
+
+    notify_monitor(district);
+    printf("Report successfully added. Monitor notification attempted.\n");
 }
 
 void handle_list(const char *district, const char *role, const char *user) {
@@ -632,5 +639,47 @@ void handle_remove_district(const char *district, const char *role) {
                                 "successfully.\n");
             }
         }
+    }
+}
+
+void notify_monitor(const char *district) {
+    int notification_successful = 0;
+
+    int pid_fd = open(".monitor_pid", O_RDONLY);
+    if (pid_fd != -1) {
+        char pid_str[32] = {0};
+        if (read(pid_fd, pid_str, sizeof(pid_str) - 1) > 0) {
+            pid_t monitor_pid = atoi(pid_str);
+
+            if (monitor_pid > 0 && kill(monitor_pid, SIGUSR1) == 0) {
+                notification_successful = 1;
+            }
+        }
+        close(pid_fd);
+    }
+
+    char log_path[FILE_PATH_SIZE];
+    snprintf(log_path, sizeof(log_path), "%s/logged_district", district);
+
+    int log_fd = open(log_path, O_WRONLY | O_APPEND);
+    if (log_fd != -1) {
+        char log_msg[128];
+        int len;
+
+        if (notification_successful) {
+            len = snprintf(
+                log_msg, sizeof(log_msg),
+                "Event Notification: SUCCESS (Monitor informed via SIGUSR1)\n");
+        } else {
+            len = snprintf(
+                log_msg, sizeof(log_msg),
+                "Event Notification: FAILED (Monitor could not be informed)\n");
+        }
+
+        write(log_fd, log_msg, len);
+        close(log_fd);
+    } else {
+        perror("System Warning: Could not open logged_district to append "
+               "notification status");
     }
 }
