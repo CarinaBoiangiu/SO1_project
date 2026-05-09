@@ -1,10 +1,10 @@
 #define _POSIX_C_SOURCE 200809L
+#include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include <string.h>
-#include <signal.h>
+#include <unistd.h>
 
 const char *PID_FILE = ".monitor_pid";
 
@@ -17,16 +17,15 @@ void cleanup_and_exit() {
     exit(EXIT_SUCCESS);
 }
 
-
 void handle_sigint(int sig) {
     (void)sig;
-    cleanup_and_exit(); 
+    cleanup_and_exit();
 }
 
-
 void handle_sigusr1(int sig) {
-    (void)sig; 
-    printf("[EVENT] A new report has been added to the city infrastructure system!\n");
+    (void)sig;
+    printf("[EVENT] A new report has been added to the city infrastructure "
+           "system!\n");
 }
 
 int main() {
@@ -34,17 +33,14 @@ int main() {
     printf("Starting monitor_reports...\n");
     printf("Monitor PID: %d\n", my_pid);
 
-
     struct sigaction monitor_actions;
     memset(&monitor_actions, 0x00, sizeof(struct sigaction));
-
 
     monitor_actions.sa_handler = handle_sigint;
     if (sigaction(SIGINT, &monitor_actions, NULL) < 0) {
         perror("Monitor set SIGINT");
         exit(-1);
     }
-
 
     monitor_actions.sa_handler = handle_sigusr1;
     if (sigaction(SIGUSR1, &monitor_actions, NULL) < 0) {
@@ -71,8 +67,7 @@ int main() {
     printf("Successfully initialized %s.\n", PID_FILE);
     printf("Monitor is now running in the background. Waiting for events...\n");
 
-    
-    while(1) {
+    while (1) {
         pause();
     }
 

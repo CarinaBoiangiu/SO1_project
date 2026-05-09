@@ -1,6 +1,7 @@
 #include "city_manager.h"
 #include "filter.h"
 
+#include <dirent.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
@@ -27,8 +28,11 @@ void handle_update_threshold(const char *district, const char *role,
                              const char *user, const char *value_str);
 void handle_remove_district(const char *district, const char *role);
 void notify_monitor(const char *district);
+void check_dangling_symlinks();
 
 int main(int argc, char *argv[]) {
+    check_dangling_symlinks();
+
     if (argc < 6) {
         fprintf(
             stderr,
@@ -43,18 +47,23 @@ int main(int argc, char *argv[]) {
     char *command = NULL;
     char *district = NULL;
     char *extra_arg = NULL;
+    int args_start_index = -1;
 
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--role") == 0 && i + 1 < argc)
+        if (strcmp(argv[i], "--role") == 0 && i + 1 < argc) {
             role = argv[++i];
-        else if (strcmp(argv[i], "--user") == 0 && i + 1 < argc)
+        } else if (strcmp(argv[i], "--user") == 0 && i + 1 < argc) {
             user = argv[++i];
-        else if (strncmp(argv[i], "--", 2) == 0) {
+        } else if (strncmp(argv[i], "--", 2) == 0) {
             command = argv[i] + 2;
-            if (i + 1 < argc)
+            if (i + 1 < argc) {
                 district = argv[++i];
-            if (i + 1 < argc && strncmp(argv[i + 1], "--", 2) != 0)
-                extra_arg = argv[++i];
+            }
+            if (i + 1 < argc && strncmp(argv[i + 1], "--", 2) != 0) {
+                extra_arg = argv[i + 1];
+                args_start_index = i + 1;
+                break;
+            }
         }
     }
 
@@ -80,11 +89,14 @@ int main(int argc, char *argv[]) {
     } else if (strcmp(command, "remove_district") == 0) {
         handle_remove_district(district, role);
     } else if (strcmp(command, "filter") == 0) {
-        if (!extra_arg) {
-            fprintf(stderr, "Error: Missing condition for filter command.\n");
+        if (args_start_index == -1) {
+            fprintf(stderr,
+                    "Error: Missing condition(s) for filter command.\n");
             return 1;
         }
-        filter_reports(district, role, user, extra_arg);
+        int condition_count = argc - args_start_index;
+        filter_reports(district, role, user, condition_count,
+                       &argv[args_start_index]);
     } else {
         fprintf(stderr, "Error: Unknown command '--%s'\n", command);
         return 1;
@@ -648,8 +660,14 @@ void notify_monitor(const char *district) {
     int pid_fd = open(".monitor_pid", O_RDONLY);
     if (pid_fd != -1) {
         char pid_str[32] = {0};
-        if (read(pid_fd, pid_str, sizeof(pid_str) - 1) > 0) {
-            pid_t monitor_pid = atoi(pid_str);
+        ssize_t bytes_read = read(pid_fd, pid_str, sizeof(pid_str) - 1);
+
+        if (bytes_read > 0) {
+            pid_str[bytes_read] = '\0';
+
+            pid_str[strcspn(pid_str, "\r\n")] = 0;
+
+            pid_t monitor_pid = (pid_t)atol(pid_str);
 
             if (monitor_pid > 0 && kill(monitor_pid, SIGUSR1) == 0) {
                 notification_successful = 1;
@@ -676,10 +694,43 @@ void notify_monitor(const char *district) {
                 "Event Notification: FAILED (Monitor could not be informed)\n");
         }
 
-        write(log_fd, log_msg, len);
-        close(log_fd);
+        if (write(log_fd, log_msg, len) != len) {
+            perror("System Error: Failed to write notification status to "
+                   "logged_district");
+        }
+
+        if (close(log_fd) == -1) {
+            perror("System Error: Failed to close logged_district");
+        }
     } else {
         perror("System Warning: Could not open logged_district to append "
                "notification status");
     }
+}
+
+void check_dangling_symlinks() {
+    DIR *dir = opendir(".");
+    if (dir == NULL) {
+        perror("System Warning: Could not open current directory to check "
+               "symlinks");
+        return;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strncmp(entry->d_name, "active_reports-", 15) == 0) {
+            struct stat lst, st;
+
+            if (lstat(entry->d_name, &lst) == 0 && S_ISLNK(lst.st_mode)) {
+                if (stat(entry->d_name, &st) != 0) {
+                    fprintf(stderr,
+                            "Warning: Dangling symlink detected - '%s' points "
+                            "to a nonexistent file.\n",
+                            entry->d_name);
+                }
+            }
+        }
+    }
+
+    closedir(dir);
 }

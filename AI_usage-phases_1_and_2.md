@@ -181,6 +181,113 @@
 
     .PHONY: all clean
     ```
+5.  Using AI to veriffy some missing if conddition so the project would be more robust. 
+    - Promt used :
+    ```txt
+    now rewrite notify monitor without vulnerabilities:
+    void notify_monitor(const char *district) {
+        int notification_successful = 0;
+
+        int pid_fd = open(".monitor_pid", O_RDONLY);
+        if (pid_fd != -1) {
+            char pid_str[32] = {0};
+            if (read(pid_fd, pid_str, sizeof(pid_str) - 1) > 0) {
+                pid_t monitor_pid = atoi(pid_str);
+
+                if (monitor_pid > 0 && kill(monitor_pid, SIGUSR1) == 0) {
+                    notification_successful = 1;
+                }
+            }
+            close(pid_fd);
+        }
+
+        char log_path[FILE_PATH_SIZE];
+        snprintf(log_path, sizeof(log_path), "%s/logged_district", district);
+
+        int log_fd = open(log_path, O_WRONLY | O_APPEND);
+        if (log_fd != -1) {
+            char log_msg[128];
+            int len;
+
+            if (notification_successful) {
+                len = snprintf(
+                    log_msg, sizeof(log_msg),
+                    "Event Notification: SUCCESS (Monitor informed via SIGUSR1)\n");
+            } else {
+                len = snprintf(
+                    log_msg, sizeof(log_msg),
+                    "Event Notification: FAILED (Monitor could not be informed)\n");
+            }
+
+            write(log_fd, log_msg, len);
+            close(log_fd);
+        } else {
+            perror("System Warning: Could not open logged_district to append "
+                "notification status");
+        }
+    }
+    ```
+    -  Answer generated:
+    ``` makefile
+    Here is the rewritten notify_monitor function with the vulnerabilities addressed.
+    void notify_monitor(const char *district) {
+        int notification_successful = 0;
+
+        int pid_fd = open(".monitor_pid", O_RDONLY);
+        if (pid_fd != -1) {
+            char pid_str[32] = {0};
+            ssize_t bytes_read = read(pid_fd, pid_str, sizeof(pid_str) - 1);
+            
+            if (bytes_read > 0) {
+                // Explicitly null-terminate exactly at the end of what was read
+                pid_str[bytes_read] = '\0';
+                
+                // Strip any trailing newline or carriage return for clean parsing
+                pid_str[strcspn(pid_str, "\r\n")] = 0;
+
+                // Use atol() for safer casting to pid_t (which can be a long)
+                pid_t monitor_pid = (pid_t)atol(pid_str);
+
+                if (monitor_pid > 0 && kill(monitor_pid, SIGUSR1) == 0) {
+                    notification_successful = 1;
+                }
+            }
+            close(pid_fd);
+        }
+
+        char log_path[FILE_PATH_SIZE];
+        snprintf(log_path, sizeof(log_path), "%s/logged_district", district);
+
+        int log_fd = open(log_path, O_WRONLY | O_APPEND);
+        if (log_fd != -1) {
+            char log_msg[128];
+            int len;
+
+            if (notification_successful) {
+                len = snprintf(
+                    log_msg, sizeof(log_msg),
+                    "Event Notification: SUCCESS (Monitor informed via SIGUSR1)\n");
+            } else {
+                len = snprintf(
+                    log_msg, sizeof(log_msg),
+                    "Event Notification: FAILED (Monitor could not be informed)\n");
+            }
+
+            // VULNERABILITY FIX: Ensure the write succeeds fully
+            if (write(log_fd, log_msg, len) != len) {
+                perror("System Error: Failed to write notification status to logged_district");
+            }
+            
+            // Bonus fix: Ensure the close succeeds
+            if (close(log_fd) == -1) {
+                perror("System Error: Failed to close logged_district");
+            }
+        } else {
+            perror("System Warning: Could not open logged_district to append "
+                "notification status");
+        }
+    }
+    ```
 
 ## What I changed
 
@@ -189,6 +296,18 @@
 3. I have added  `if (input == NULL || field == NULL || op == NULL || value == NULL) {
         return 0;
     }` to  check for null pointers.
+4. I have added in the function match_condition the missing timestamp field in the filter logic :   
+    ```c
+    else if (strcmp(field, "timestamp") == 0) {
+        time_t target_val = (time_t)atol(value);
+        if (strcmp(op, "==") == 0) return r->timestamp == target_val;
+        if (strcmp(op, "!=") == 0) return r->timestamp != target_val;
+        if (strcmp(op, "<") == 0)  return r->timestamp < target_val;
+        if (strcmp(op, "<=") == 0) return r->timestamp <= target_val;
+        if (strcmp(op, ">") == 0)  return r->timestamp > target_val;
+        if (strcmp(op, ">=") == 0) return r->timestamp >= target_val;
+    }
+    ```
 
 
 ## What I have learned  

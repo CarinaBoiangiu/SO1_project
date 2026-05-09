@@ -9,7 +9,7 @@
 #include "filter.h"
 
 int filter_reports(const char *district, const char *role, const char *user,
-                   const char *condition) {
+                   int condition_count, char **conditions) {
     char filepath[FILE_PATH_SIZE];
     snprintf(filepath, sizeof(filepath), "%s/reports.dat", district);
 
@@ -21,14 +21,6 @@ int filter_reports(const char *district, const char *role, const char *user,
 
     log_operation(district, role, user, "filter");
 
-    char field[32], op[4], value[64];
-    if (!parse_condition(condition, field, op, value)) {
-        fprintf(stderr,
-                "Error: Invalid condition format. Use field:operator:value "
-                "(e.g., severity:>=:2)\n");
-        exit(EXIT_FAILURE);
-    }
-
     int fd = open(filepath, O_RDONLY);
     if (fd == -1) {
         perror("System Error: open() failed on reports.dat for filtering");
@@ -38,12 +30,26 @@ int filter_reports(const char *district, const char *role, const char *user,
     Report r;
     int match_count = 0;
 
-    printf("=== Filter Results for '%s' ===\n", condition);
-
     while (read(fd, &r, sizeof(Report)) == sizeof(Report)) {
-        if (match_condition(&r, field, op, value)) {
-            // Print the matching record (using a simplified format, or adapt
-            // from your list command)
+        int all_match = 1;
+
+        for (int i = 0; i < condition_count; i++) {
+            char field[32], op[4], value[64];
+
+            if (!parse_condition(conditions[i], field, op, value)) {
+                fprintf(stderr, "Error: Invalid condition format: %s\n",
+                        conditions[i]);
+                close(fd);
+                exit(EXIT_FAILURE);
+            }
+
+            if (!match_condition(&r, field, op, value)) {
+                all_match = 0;
+                break;
+            }
+        }
+
+        if (all_match) {
             printf("ID: %d | Cat: %s | Sev: %d | Inspector: %s | Desc: %s\n",
                    r.id, r.category, r.severity, r.inspector, r.description);
             match_count++;
@@ -51,7 +57,7 @@ int filter_reports(const char *district, const char *role, const char *user,
     }
 
     if (match_count == 0) {
-        printf("No reports matched the condition.\n");
+        printf("No reports matched the conditions.\n");
     } else {
         printf("-----------------------------------\n");
         printf("Total matches: %d\n", match_count);
@@ -94,7 +100,6 @@ int match_condition(Report *r, const char *field, const char *op,
         if (strcmp(op, ">=") == 0)
             return r->severity >= target_val;
     } else if (strcmp(field, "category") == 0) {
-        // Strings only support equality/inequality
         if (strcmp(op, "==") == 0)
             return strcmp(r->category, value) == 0;
         if (strcmp(op, "!=") == 0)
@@ -104,6 +109,20 @@ int match_condition(Report *r, const char *field, const char *op,
             return strcmp(r->inspector, value) == 0;
         if (strcmp(op, "!=") == 0)
             return strcmp(r->inspector, value) != 0;
+    } else if (strcmp(field, "timestamp") == 0) {
+        time_t target_val = (time_t)atol(value);
+        if (strcmp(op, "==") == 0)
+            return r->timestamp == target_val;
+        if (strcmp(op, "!=") == 0)
+            return r->timestamp != target_val;
+        if (strcmp(op, "<") == 0)
+            return r->timestamp < target_val;
+        if (strcmp(op, "<=") == 0)
+            return r->timestamp <= target_val;
+        if (strcmp(op, ">") == 0)
+            return r->timestamp > target_val;
+        if (strcmp(op, ">=") == 0)
+            return r->timestamp >= target_val;
     }
 
     return 0;
