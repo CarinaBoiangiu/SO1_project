@@ -1,1 +1,17 @@
+# 1. Compiled Object files
 *.o
+
+# 2. Executables
+city_manager
+monitor_reports
+city_hub
+scorer
+
+# 3. Runtime generated files & symlinks
+.monitor_pid
+active_reports-*
+
+# 4. District data files (prevents committing test data inside your district folders)
+reports.dat
+district.cfg
+logged_district
