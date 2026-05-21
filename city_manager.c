@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include "city_manager.h"
 #include "filter.h"
 
@@ -11,6 +12,14 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+
+volatile sig_atomic_t child_finished = 0;
+volatile sig_atomic_t waiting_for_child = 0;
+
+void handle_sigchld(int sig) {
+    (void)sig;
+    child_finished = 1;
+}
 
 void setup_district(char *district);
 int check_permission(const char *filepath, const char *role, int require_write);
@@ -32,6 +41,15 @@ void check_dangling_symlinks();
 
 int main(int argc, char *argv[]) {
     check_dangling_symlinks();
+
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_sigchld;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+        perror("System Warning: Failed to set up SIGCHLD handler");
+    }
 
     if (argc < 6) {
         fprintf(
@@ -100,6 +118,27 @@ int main(int argc, char *argv[]) {
     } else {
         fprintf(stderr, "Error: Unknown command '--%s'\n", command);
         return 1;
+    }
+
+    if (waiting_for_child) {
+        sigset_t mask, oldmask;
+
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGCHLD);
+
+        if (sigprocmask(SIG_BLOCK, &mask, &oldmask) < 0) {
+            perror("System Error: sigprocmask failed");
+        }
+
+        while (!child_finished) {
+            sigsuspend(&oldmask);
+        }
+
+        if (sigprocmask(SIG_SETMASK, &oldmask, NULL) < 0) {
+            perror("System Error: sigprocmask restore failed");
+        }
+
+        printf("Background deletion has successfully finished.\n");
     }
 
     return 0;
@@ -600,6 +639,7 @@ void handle_update_threshold(const char *district, const char *role,
         perror("System Error: close() failed on district.cfg");
     }
 }
+
 void handle_remove_district(const char *district, const char *role) {
 
     if (strcmp(role, "manager") != 0) {
@@ -627,30 +667,23 @@ void handle_remove_district(const char *district, const char *role) {
     }
 
     printf("Initiating recursive deletion of ditrict: %s... \n", district);
+
+    waiting_for_child = 1;
+
     pid_t pid = fork();
 
     if (pid < 0) {
-        perror("System Error:  fork() failed");
+        perror("System Error: fork() failed");
         exit(EXIT_FAILURE);
     } else if (pid == 0) {
+        // child
         execlp("rm", "rm", "-rf", district, NULL);
         perror("System Error: execlp() failed to execute rm");
         exit(EXIT_FAILURE);
     } else {
-        int status;
-
-        if (wait(&status) == -1) {
-            perror("System Error: wait() failed");
-        } else {
-            if (status == 0) {
-                printf("District '%s' and all its contents were successfully "
-                       "removed.\n",
-                       district);
-            } else {
-                fprintf(stderr, "Error: the 'rm -rf' command did not execute "
-                                "successfully.\n");
-            }
-        }
+        // parent
+        printf("District '%s' is being removed completely in the background.\n",
+               district);
     }
 }
 

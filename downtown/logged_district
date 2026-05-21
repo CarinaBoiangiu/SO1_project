@@ -70,3 +70,29 @@ manager filter
 1778328874
 admin
 manager filter
+1779360547
+Carina
+manager add
+Event Notification: SUCCESS (Monitor informed via SIGUSR1)
+1779360567
+Carina
+manager update_threshold
+1779360583
+Carina
+manager list
+1779360596
+Carina
+manager view
+1779360615
+Carina
+manager filter
+1779360627
+Carina
+manager filter
+1779368364
+Carina
+manager add
+Event Notification: SUCCESS (Monitor informed via SIGUSR1)
+1779368382
+Carina
+manager view
